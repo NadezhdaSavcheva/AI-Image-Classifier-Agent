@@ -1,14 +1,32 @@
 from __future__ import annotations
 
 import io
+import numpy as np
 import streamlit as st
 import requests
 from PIL import Image, ImageOps
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
 def exif_safe_open(img_file) -> Image.Image:
     """Open image with EXIF orientation applied and convert to RGB."""
     img = Image.open(img_file).convert("RGB")
     return ImageOps.exif_transpose(img)
+
+def center_crop_square(img: Image.Image) -> Image.Image:
+    w, h = img.size
+    side = min(w, h)
+    left = (w - side) // 2
+    top = (h - side) // 2
+    return img.crop((left, top, left + side, top + side))
+
+def preprocess_image(img: Image.Image, target_size=(224, 224), do_center_crop=True):
+    if do_center_crop:
+        img = center_crop_square(img)
+    img = img.resize(target_size, Image.Resampling.LANCZOS)
+    arr = np.array(img).astype(np.float32)
+    arr = preprocess_input(arr)
+    arr = np.expand_dims(arr, axis=0)
+    return arr
 
 @st.cache_data(show_spinner=False)
 def fetch_image_from_url(url: str) -> Image.Image:
