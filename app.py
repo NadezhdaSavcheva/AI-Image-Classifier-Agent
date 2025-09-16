@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import time
 import numpy as np
 import streamlit as st
 import requests
@@ -54,6 +55,22 @@ def fetch_image_from_url(url: str) -> Image.Image:
 def load_model():
     return MobileNetV2(weights="imagenet")
 
+def classify_image(model, pil_image: Image.Image, topk: int, threshold: float, do_center_crop: bool):
+    arr = preprocess_image(pil_image, do_center_crop=do_center_crop)
+    t0 = time.perf_counter()
+    preds = model.predict(arr, verbose=0)
+    dt = time.perf_counter() - t0
+
+    decoded = decode_predictions(preds, top=5)[0]
+    # decoded: [(class_id, label, score), ...]
+    filtered = [
+        (label.replace("_", " "), float(score))
+        for (_, label, score) in decoded
+        if float(score) >= threshold
+    ]
+    filtered = filtered[:topk]
+    return filtered, dt
+
 def main():
     st.set_page_config(page_title="AI Image Classifier", page_icon="🖼️", layout="centered")
 
@@ -105,8 +122,23 @@ def main():
 
     if image is not None:
         st.image(image, caption=f"Source: {st.session_state.img_source}", use_container_width=True)
-        st.info("Clicking Classify will be enabled in the next step.")
 
+        if st.button("Classify"):
+            with st.spinner("Analyzing image..."):
+                try:
+                    predictions, dt = classify_image(
+                        model, image, topk=topk, threshold=threshold, do_center_crop=do_center_crop
+                    )
+                    if not predictions:
+                        st.warning("No classes above the selected threshold. Try lowering it and run again.")
+                    else:
+                        st.subheader("Predictions:")
+                        for label, score in predictions:
+                            st.write(f"**{label}** — {score:.2%}")
+                            st.progress(min(int(score * 100), 100))
+                        st.caption(f"Inference time: {dt*1000:.0f} ms")
+                except Exception as e:
+                    st.error(f"Classification error: {e}")
     else:
         st.info("Upload a file, or paste a URL and click \"Load from URL\".")
 
