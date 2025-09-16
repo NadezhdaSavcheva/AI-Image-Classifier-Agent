@@ -5,7 +5,11 @@ import numpy as np
 import streamlit as st
 import requests
 from PIL import Image, ImageOps
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow.keras.applications.mobilenet_v2 import (
+    MobileNetV2,
+    preprocess_input,
+    decode_predictions,
+)
 
 def exif_safe_open(img_file) -> Image.Image:
     """Open image with EXIF orientation applied and convert to RGB."""
@@ -46,6 +50,10 @@ def fetch_image_from_url(url: str) -> Image.Image:
         pass
     return exif_safe_open(io.BytesIO(r.content))
 
+@st.cache_resource(show_spinner=False)
+def load_model():
+    return MobileNetV2(weights="imagenet")
+
 def main():
     st.set_page_config(page_title="AI Image Classifier", page_icon="🖼️", layout="centered")
 
@@ -57,6 +65,8 @@ def main():
         topk = st.slider("Top‑K", min_value=1, max_value=5, value=3, step=1)
         threshold = st.slider("Confidence threshold", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
         do_center_crop = st.checkbox("Center‑crop (more stable results)", value=True)
+
+    model = load_model()
 
     if "img_bytes" not in st.session_state:
         st.session_state.img_bytes = None
@@ -95,7 +105,7 @@ def main():
 
     if image is not None:
         st.image(image, caption=f"Source: {st.session_state.img_source}", use_container_width=True)
-        st.info("Classification will be added in the next step.")
+        st.info("Clicking Classify will be enabled in the next step.")
 
     else:
         st.info("Upload a file, or paste a URL and click \"Load from URL\".")
